@@ -1,0 +1,1507 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard - Bidibet (Server-backed Notifications)</title>
+  <style>
+    :root{--bg:#0f1724;--panel:#0b0f16;--muted:#9aa3b2;--accent:#6b7280;--highlight:#ff6b6b}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;color:#e6eef8;background:var(--bg)}
+    .app{display:flex;min-height:100vh}
+    .sidebar{width:220px;background:#0b0f16;padding:20px;border-right:1px solid rgba(255,255,255,0.02);position:relative}
+    .logo{font-weight:700;color:#fff;margin-bottom:24px}
+    .nav{list-style:none;padding:0;margin:0}
+    .nav li{display:flex;align-items:center;gap:12px;padding:10px;border-radius:8px;color:var(--muted);cursor:pointer}
+    .nav li.active, .nav li:hover{background:rgba(255,255,255,0.03);color:#fff}
+    .content{flex:1;padding:28px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    .search{background:#0f1724;padding:8px 12px;border-radius:8px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:2fr 1fr;gap:18px}
+    .card{background:#0b1117;padding:18px;border-radius:12px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    .banner{height:180px;border-radius:10px;background:linear-gradient(90deg,#14202b,#0f1724);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px}
+    .prev-matches{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+    .table{width:100%;border-collapse:collapse}
+    .table tr td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.03);color:var(--muted)}
+    .center-title{display:flex;align-items:center;justify-content:space-between}
+    .btn{background:#0f1724;color:#fff;padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
+    .empty{color:var(--muted);padding:24px;text-align:center}
+    .modal{position:fixed;inset:0;Display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.6)}
+    .modal .panel{background:#071018;padding:18px;border-radius:10px;width:420px}
+    .modal input, .modal select{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);margin-top:8px;background:#071018;color:#e6eef8}
+    .right-panel .points{display:flex;flex-direction:column;gap:12px}
+    .small{color:var(--muted);font-size:13px}
+    .points-table { width:100%; border-collapse:collapse; margin-top:8px; }
+    .points-table thead th { text-align:left; padding:10px; color:#d2d8df; font-size:13px; border-bottom:1px solid rgba(255,255,255,0.03); }
+    .points-table tbody td { padding:10px; color:#e6eef8; border-bottom:1px solid rgba(255,255,255,0.03); font-size:14px; vertical-align:middle; }
+    .last5 { display:flex; gap:6px; align-items:center; }
+    .last5 .win { width:18px; height:18px; border-radius:50%; background:#16A34A; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-size:12px }
+    .last5 .loss { width:18px; height:18px; border-radius:50%; background:#DC2626; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-size:12px }
+    table.games { width:100%; border-collapse:collapse; margin-top:8px; }
+    table.games thead th { text-align:left; padding:10px; color:#d2d8df; font-size:13px; border-bottom:1px solid rgba(255,255,255,0.03); }
+    table.games tbody td { padding:10px; color:#e6eef8; border-bottom:1px solid rgba(255,255,255,0.03); font-size:14px; }
+    .notif-list { max-height:220px; overflow:auto; margin-top:10px; }
+    .notif-item { padding:8px; border-radius:8px; background:rgba(255,255,255,0.02); margin-bottom:8px; }
+    .total-confirmed { font-weight:700; color:#b7ffd9; margin-bottom:10px }
+    .toast { position:fixed; right:20px; bottom:20px; background:#07322a; padding:12px 16px; border-radius:8px; color:#dff6ea; box-shadow:0 6px 18px rgba(0,0,0,0.6); display:none; z-index:9999}
+    @media (max-width:900px){ .grid{grid-template-columns:1fr} .prev-matches{grid-template-columns:repeat(2,1fr)} }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" role="navigation">
+      <div class="logo">CRIC.CO</div>
+      <ul class="nav" id="menu">
+        <li data-key="home" class="active">🏠 Home</li>
+        <li data-key="betting">🎯 Betting</li>
+        <li data-key="leaderboard">📊 Leaderboard</li>
+        <li data-key="games">🎯 Games</li>
+        <li data-key="admin">🔒 Admin</li>
+      </ul>
+      <div style="position: absolute;left:20px;bottom:20px;color:var(--muted);font-size:13px">Logged in as <span id="userName">User</span></div>
+    </aside>
+
+    <main class="content">
+      <div class="topbar">
+        <div class="search">🔍 Search</div>
+        <div style="display:flex;gap:12px;align-items:center"><button id="logoutBtn" class="btn">Logout</button></div>
+      </div>
+
+      <!-- PAGES -->
+      <div id="pageHome">
+        <div class="grid">
+          <div>
+            <div class="card banner">
+              <div>
+                <div style="font-weight:700">Todays Match</div>
+                <div class="small" style="margin-top:8px">No matches created by admin yet.</div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-top:12px">
+              <div class="center-title"><h3 style="margin:0">Previous Match</h3></div>
+              <div class="prev-matches" id="prevMatches"></div>
+              <div id="noPrev" class="empty">No previous matches to show.</div>
+            </div>
+          </div>
+
+          <aside class="card right-panel">
+            <h3 style="margin-top:0">Points Table</h3>
+            <div id="pointsWrap">
+              <div class="small" id="pointsEmpty">No points available. Admin hasn't created any matches.</div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div id="pageBetting" style="display:none">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <h3 style="margin:0">Betting</h3>
+            <div class="small">Place bets, view odds and recent bets (demo)</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+            <div style="background:#0f1724;padding:14px;border-radius:10px;">
+              <div style="font-weight:700;margin-bottom:8px">Quick Bet</div>
+              <div class="small">Pick a match and place a quick bet amount. (Server-backed)</div>
+
+              <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+                <label class="small" style="min-width:92px">From</label>
+                <input id="quickFrom" readonly style="flex:1;padding:8px;border-radius:6px;background:#071018;border:1px solid rgba(255,255,255,0.03);color:#aee6ff" />
+              </div>
+
+              <div style="margin-top:8px;display:flex;gap:8px">
+                <select id="quickMatch" style="flex:1;padding:8px;border-radius:6px;background:#071018;border:1px solid rgba(255,255,255,0.03);color:#e6eef8">
+                  <option value="">Select Match</option>
+                </select>
+                <input id="quickAmt" placeholder="Amount" style="width:100px;padding:8px;border-radius:6px;background:#071018;color:#e6eef8;border:1px solid rgba(255,255,255,0.03)"/>
+              </div>
+
+              <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+                <label class="small" style="min-width:92px">Supporting</label>
+                <select id="quickTeam" style="flex:1;padding:8px;border-radius:6px;background:#071018;border:1px solid rgba(255,255,255,0.03);color:#e6eef8">
+                  <option value="">Select Team</option>
+                </select>
+              </div>
+
+              <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+                <label class="small" style="min-width:92px">Opponent</label>
+                <select id="quickOpponent" style="flex:1;padding:8px;border-radius:6px;background:#071018;border:1px solid rgba(255,255,255,0.03);color:#e6eef8">
+                  <option value="">Select Name</option>
+                </select>
+              </div>
+
+              <div style="margin-top:10px;text-align:right"><button id="placeBetBtn" class="btn">Request Bet</button></div>
+              <p id="betMsg" class="small" style="margin-top:8px"></p>
+
+              <div style="margin-top:12px">
+                <div style="font-weight:700;margin-bottom:6px">Notifications</div>
+                <div id="notifWrap" class="notif-list small">No notifications.</div>
+              </div>
+            </div>
+
+            <div style="background:#0f1724;padding:14px;border-radius:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <div style="font-weight:700">Recent Bets</div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <!-- NEW: Match filter -->
+                  <select id="betMatchFilter" style="padding:6px;border-radius:6px;background:#071018;border:1px solid rgba(255,255,255,0.03);color:#e6eef8">
+                    <option value="">All Matches</option>
+                  </select>
+
+                  <select id="betDateFilter" style="padding:6px;border-radius:6px;background:#071018;border:1px solid rgba(255,255,255,0.03);color:#e6eef8">
+                    <option value="">All Dates</option>
+                  </select>
+                  <div id="totalConfirmedEl" class="total-confirmed">Total Confirmed: 0</div>
+                </div>
+              </div>
+              <div id="recentBets" class="small">No recent bets (server-backed).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pageLeaderboard" style="display:none">
+        <div class="card">
+          <h3 style="margin-top:0">Leaderboard</h3>
+          <p class="small">Top users by Total Win</p>
+          <div style="margin-top:14px; overflow:auto;">
+            <table id="leaderTable" style="width:100%; border-collapse:collapse;">
+              <thead>
+                <tr style="color:#d2d8df; text-align:left; font-size:13px;">
+                  <th style="padding:10px 8px; width:48px;">Sr.</th>
+                  <th style="padding:10px 8px;">User Name</th>
+                  <th style="padding:10px 8px; width:80px;">Win</th>
+                  <th style="padding:10px 8px; width:80px;">Lose</th>
+                  <th style="padding:10px 8px; width:120px;">Total Win</th>
+                </tr>
+              </thead>
+              <tbody id="leaderBody"></tbody>
+            </table>
+            <div id="noLeader" class="empty" style="display:none">No users yet.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pageGames" style="display:none">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h3 style="margin:0">Games</h3>
+            <div class="small">Admin can set Winners / Losers for matches they created</div>
+          </div>
+
+          <div style="margin-top:12px; overflow:auto">
+            <table class="games">
+              <thead>
+                <tr>
+                  <th style="width:56px">Sr. No</th>
+                  <th style="width:130px">Date</th>
+                  <th>Match</th>
+                  <th style="width:140px">Winner</th>
+                  <th style="width:140px">Lose</th>
+                  <th style="width:160px">Action</th>
+                </tr>
+              </thead>
+              <tbody id="gamesBody"></tbody>
+            </table>
+            <div id="noGames" class="empty" style="display:none">No matches yet.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pageAdmin" style="display:none">
+        <div class="card">
+          <h3>Admin Panel</h3>
+          <p class="small">Create matches and manage highlights. (Demo)</p>
+          <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <input id="admMatchTitle" placeholder="Match title (e.g. RCB VS CSK)" />
+            <input id="admMatchDate" placeholder="Date (e.g. 05-Dec-2025)" />
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end">
+            <button id="createMatchBtn" class="btn">Create Match</button>
+          </div>
+          <p id="adminMsg" class="small"></p>
+
+          <!-- Admin cutoff UI -->
+          <div style="margin-top:14px;border-top:1px dashed rgba(255,255,255,0.03);padding-top:12px;display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="font-weight:700">Cancellation cutoff</div>
+              <div class="small">Set time (HH:MM) users can cancel on match day</div>
+            </div>
+            <div style="display:flex;align-items:center">
+              <input id="adminCutoffInput" placeholder="e.g. 19:00" style="padding:8px;border-radius:6px;background:#071018;border:1px solid rgba(255,255,255,0.03);color:#e6eef8" />
+              <button id="saveCutoffBtn" class="btn" style="margin-left:8px">Save</button>
+              <div id="cutoffStatus" class="small" style="margin-left:12px;color:var(--muted)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Result Modal -->
+  <div id="resultModal" class="modal" style="display:none">
+    <div class="panel">
+      <div style="font-weight:700">Set Match Result</div>
+      <div id="resultMatchTitle" style="margin-top:8px;font-weight:600"></div>
+      <select id="resultWinner" style="margin-top:12px"></select>
+      <select id="resultLoser" style="margin-top:8px"></select>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px;gap:8px">
+        <button id="resultCancel" class="btn">Cancel</button>
+        <button id="resultSave" class="btn">Save Result</button>
+      </div>
+      <p id="resultMsg" class="small" style="margin-top:8px"></p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  
+  <!-- ================= Redeal Modal ================= -->
+   <div id="redealModal" class="modal" style="display:none">
+    <div class="panel">
+      <div style="font-weight:700">Redeal Bet</div>
+      <p class="small">Enter new bet amount</p>
+      <input id="redealAmount" type="number" placeholder="Amount" />
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button class="btn" onclick="closeRedeal()">Cancel</button>
+        <button class="btn" onclick="submitRedeal()">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /**************************************************************************
+   * CONFIG + STATE
+   **************************************************************************/
+  const CONFIG = {
+    API_BASE: window.location.origin,
+    POLL_INTERVAL_MS: 5000,
+    MAX_LOCAL_BETS: 500,
+    SELECTORS: {
+      userName: '#userName', quickFrom: '#quickFrom', quickMatch: '#quickMatch',
+      quickAmt: '#quickAmt', quickTeam: '#quickTeam', quickOpponent: '#quickOpponent',
+      placeBetBtn: '#placeBetBtn', notifWrap: '#notifWrap', recentBets: '#recentBets',
+      totalConfirmedEl: '#totalConfirmedEl', prevMatches: '#prevMatches', noPrev: '#noPrev',
+      pointsWrap: '#pointsWrap', pointsEmpty: '#pointsEmpty', gamesBody: '#gamesBody', noGames: '#noGames',
+      leaderBody: '#leaderBody', noLeader: '#noLeader', createMatchBtn: '#createMatchBtn',
+      admMatchTitle: '#admMatchTitle', admMatchDate: '#admMatchDate', adminMsg:'#adminMsg',
+      resultModal: '#resultModal', resultWinner:'#resultWinner', resultLoser:'#resultLoser', resultMatchTitle:'#resultMatchTitle',
+      resultSave:'#resultSave', resultCancel:'#resultCancel', resultMsg:'#resultMsg', toast:'#toast',
+      logoutBtn:'#logoutBtn', menu:'#menu', betDateFilter:'#betDateFilter', betMatchFilter:'#betMatchFilter',
+      adminCutoffInput: '#adminCutoffInput', saveCutoffBtn: '#saveCutoffBtn', cutoffStatus: '#cutoffStatus'
+    }
+  };
+
+  const STATE = {
+    currentUser: null,
+    teams: [],
+    matches: [],
+    polls: { alerts: null },
+    gamesCache: [],
+    lastCombinedBets: [],
+    allUsers: []   // <-- store all users here so we can resolve numeric IDs
+  };
+  let REDEAL_BET_ID = null;
+  let REDEAL_OLD_AMOUNT = null;
+
+  /**************************************************************************
+   * UTIL helpers (DOM, fetch, toast) + safe localStorage helpers
+   **************************************************************************/
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+  function showToast(msg, t = 3500) {
+    const el = $(CONFIG.SELECTORS.toast);
+    if(!el) return;
+    el.textContent = msg; el.style.display = 'block';
+    clearTimeout(el._t);
+    el._t = setTimeout(()=> el.style.display = 'none', t);
+  }
+  async function apiFetch(path, opts = {}) {
+    const url = path.startsWith('http') ? path : (CONFIG.API_BASE + path);
+    const merged = Object.assign({ credentials: 'include' }, opts);
+    try {
+      const res = await fetch(url, merged);
+      const json = await (res.headers.get('content-type') && res.headers.get('content-type').includes('application/json') ? res.json() : Promise.resolve(null));
+      return { ok: res.ok, status: res.status, json };
+    } catch (err) {
+      console.warn('apiFetch error', err, url);
+      return { ok: false, status: 0, json: null, error: err };
+    }
+  }
+
+  // Safe localStorage handlers for userAlerts
+  function getStoredAlerts() {
+    try {
+      const raw = localStorage.getItem('userAlerts');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function setStoredAlerts(arr) {
+    try {
+      if (!Array.isArray(arr)) arr = [];
+      localStorage.setItem('userAlerts', JSON.stringify(arr));
+    } catch (e) {
+      // ignore storage errors
+    }
+  }
+
+  /**************************************************************************
+   * Small helper to resolve a user's display name given different payload shapes
+   **************************************************************************/
+  function resolveUserName(payloadOrValue){
+    // If it's a plain string/number, try to resolve via STATE.allUsers first
+    if (payloadOrValue === null || payloadOrValue === undefined) return '';
+    // If object with name-like fields:
+    if (typeof payloadOrValue === 'object') {
+      const p = payloadOrValue;
+      if (p.name) return p.name;
+      if (p.fullName) return p.fullName;
+      if (p.username) return p.username;
+      if (p.displayName) return p.displayName;
+      if (p.toName) return p.toName;
+      if (p.fromName) return p.fromName;
+    }
+    // if primitive
+    if (typeof payloadOrValue === 'string') {
+      // if a number-like string, try to match user id
+      if (/^\d+$/.test(payloadOrValue)) {
+        const id = Number(payloadOrValue);
+        const u = STATE.allUsers.find(x => Number(x.id) === id);
+        return u ? (u.name || u.username || String(u.id)) : payloadOrValue;
+      }
+      return payloadOrValue;
+    }
+    if (typeof payloadOrValue === 'number') {
+      const id = payloadOrValue;
+      const u = STATE.allUsers.find(x => Number(x.id) === id);
+      return u ? (u.name || u.username || String(u.id)) : String(payloadOrValue);
+    }
+    return String(payloadOrValue);
+  }
+
+  /**************************************************************************
+   * BOOT
+   **************************************************************************/
+  (async function init(){
+    try {
+      const me = await apiFetch('/api/me');
+      if(!me.ok){ window.location.href='index.html'; return; }
+      STATE.currentUser = me.json.user;
+      window.currentUser = STATE.currentUser;
+      $(CONFIG.SELECTORS.userName).textContent = STATE.currentUser.name || 'User';
+      $(CONFIG.SELECTORS.quickFrom).value = STATE.currentUser.name || '';
+      initMenu();                 // <-- wire menu clicks
+      await loadTeams();
+      await populateBetMatches(); // populates STATE.matches
+      await refreshAll();
+      startPolling();
+      initSocketClient();
+      loadAdminCutoff(); // load existing cutoff into admin UI
+      if(window.socket && typeof window.socketIdentify === 'function'){ window.socketIdentify(); }
+    } catch(e){
+      console.error('init error', e);
+      window.location.href='index.html';
+    }
+  })();
+
+  /**************************************************************************
+   * Menu / Page switching initialization
+   **************************************************************************/
+  function initMenu(){
+    const menu = document.getElementById('menu');
+    if(!menu) return;
+    menu.querySelectorAll('li[data-key]').forEach(li => {
+      li.addEventListener('click', (e) => {
+        const key = li.dataset.key;
+        setActiveMenuKey(key);
+      });
+    });
+
+    // Logout button
+    const logout = document.querySelector(CONFIG.SELECTORS.logoutBtn);
+    if(logout) logout.addEventListener('click', () => { window.location.href = 'index.html'; });
+
+    // initial activation already on 'home' default
+    setActiveMenuKey('home');
+  }
+
+  function setActiveMenuKey(key){
+    // map keys to page ids
+    const map = {
+      home: 'pageHome',
+      betting: 'pageBetting',
+      leaderboard: 'pageLeaderboard',
+      games: 'pageGames',
+      admin: 'pageAdmin'
+    };
+    // remove active class
+    document.querySelectorAll('#menu li').forEach(li => li.classList.remove('active'));
+    const activeLi = document.querySelector(`#menu li[data-key="${key}"]`);
+    if(activeLi) activeLi.classList.add('active');
+
+    // hide all pages
+    Object.values(map).forEach(pid => {
+      const p = document.getElementById(pid);
+      if(p) p.style.display = 'none';
+    });
+    // show selected page
+    const showId = map[key];
+    if(showId){
+      const showEl = document.getElementById(showId);
+      if(showEl) showEl.style.display = '';
+    }
+
+    // extra actions on page switch
+    if(key === 'betting') {
+      // populate opponents in case they changed, and re-render bets
+      populateOpponents().catch(()=>{});
+      renderRecentBets($(CONFIG.SELECTORS.betDateFilter) ? $(CONFIG.SELECTORS.betDateFilter).value : '', $(CONFIG.SELECTORS.betMatchFilter) ? $(CONFIG.SELECTORS.betMatchFilter).value : '');
+    }
+    if(key === 'home') {
+      renderGames().catch(()=>{});
+      renderPoints().catch(()=>{});
+    }
+    if(key === 'leaderboard') {
+      renderLeaderboard().catch(()=>{});
+    }
+  }
+
+  /**************************************************************************
+   * TEAMS + POINTS + GAMES + LEADERBOARD
+   **************************************************************************/
+  async function loadTeams(){
+    const r = await apiFetch('/api/teams');
+    if(r.ok && r.json && Array.isArray(r.json.teams)) STATE.teams = r.json.teams;
+    return STATE.teams;
+  }
+  function findTeamByName(name){
+    if(!name) return null;
+    return STATE.teams.find(t => t.name && t.name.toLowerCase() === name.toLowerCase());
+  }
+
+  async function renderPoints(){
+    const wrap = $(CONFIG.SELECTORS.pointsWrap), emptyEl = $(CONFIG.SELECTORS.pointsEmpty);
+    if(!wrap) return;
+    wrap.querySelectorAll('table.points-table').forEach(n => n.remove());
+    try {
+      const res = await apiFetch('/api/points');
+      if(!res.ok || !res.json){ emptyEl.style.display='block'; return; }
+      const teams = res.json.teams || [];
+      if(teams.length === 0){ emptyEl.style.display='block'; return; }
+      emptyEl.style.display='none';
+      const tbl = document.createElement('table'); tbl.className = 'points-table';
+      tbl.innerHTML = `
+        <thead>
+          <tr>
+            <th style="width:36px">#</th>
+            <th>Team</th>
+            <th style="width:60px">M</th>
+            <th style="width:60px">W</th>
+            <th style="width:60px">L</th>
+            <th style="width:80px">Pts</th>
+            <th style="width:140px">Last 5</th>
+          </tr>
+        </thead><tbody></tbody>`;
+      const tbody = tbl.querySelector('tbody');
+
+      teams.forEach((t, idx) => {
+        const tr = document.createElement('tr');
+        const last5Html = (t.last5||[]).slice(0,5).map(r => r === 'W' ? `<span class="win" title="Win">✓</span>` : `<span class="loss" title="Loss">✕</span>`).join('');
+        tr.innerHTML = `
+          <td>${idx+1}</td>
+          <td style="font-weight:600;color:#e6eef8">${t.team || ''}</td>
+          <td style="text-align:center">${t.M}</td>
+          <td style="text-align:center">${t.W}</td>
+          <td style="text-align:center">${t.L}</td>
+          <td style="text-align:center">${t.Pts}</td>
+          <td><div class="last5">${last5Html}</div></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      wrap.appendChild(tbl);
+    } catch(err){
+      console.error('renderPoints error', err);
+      emptyEl.style.display='block';
+    }
+  }
+
+  async function renderGames(){
+    const body = $(CONFIG.SELECTORS.gamesBody), noGames = $(CONFIG.SELECTORS.noGames);
+    if(!body) return;
+    body.innerHTML = '';
+    try {
+      const res = await apiFetch('/api/matches');
+      if(!res.ok || !res.json){ if(noGames) noGames.style.display='block'; return; }
+      const matches = res.json.matches || [];
+      STATE.gamesCache = matches;
+      if(matches.length === 0){ if(noGames) noGames.style.display='block'; return; }
+      noGames.style.display = 'none';
+      matches.forEach((m, idx) => {
+        const tr = document.createElement('tr');
+        const winner = m.winner || '<span class="muted-col">—</span>';
+        const loser = m.loser || '<span class="muted-col">—</span>';
+        const isCreator = STATE.currentUser && (STATE.currentUser.id === m.created_by);
+        let actionHtml = '';
+        if(!m.winner && isCreator) actionHtml = `<button class="btn" data-idx="${idx}" onclick="openResultModalByIdx(${idx})">Set Result</button>`;
+        else if(!m.winner) actionHtml = `<span class="muted-col">Awaiting result</span>`;
+        else actionHtml = `<span class="muted-col">Result saved</span>`;
+        tr.innerHTML = `
+          <td>${idx+1}</td>
+          <td>${m.date}</td>
+          <td>${m.title}</td>
+          <td style="text-align:center">${winner}</td>
+          <td style="text-align:center">${loser}</td>
+          <td style="text-align:center">${actionHtml}</td>
+        `;
+        body.appendChild(tr);
+      });
+    } catch(err){
+      console.error('renderGames error', err);
+      if(noGames) noGames.style.display='block';
+    }
+  }
+
+  window.openResultModalByIdx = function(idx){
+    const match = STATE.gamesCache[idx];
+    if(!match) return;
+    openResultModal(match);
+  };
+
+  function openResultModal(match){
+    const modal = $(CONFIG.SELECTORS.resultModal);
+    if(!modal) return;
+    const winnerSel = $(CONFIG.SELECTORS.resultWinner), loserSel = $(CONFIG.SELECTORS.resultLoser);
+    winnerSel.innerHTML = ''; loserSel.innerHTML = '';
+    let teams = [];
+    if(match.title.includes(' VS ')) teams = match.title.split(' VS ');
+    else if(match.title.includes(' vs ')) teams = match.title.split(' vs ');
+    else if(match.title.includes(' v ')) teams = match.title.split(' v ');
+    else if(match.title.includes('-')) teams = match.title.split('-');
+    teams = teams.map(s=>s.trim()).filter(Boolean);
+    if(teams.length < 2){
+      const parts = match.title.split(' ');
+      teams = [parts.slice(0,1).join(' '), parts.slice(1).join(' ')];
+    }
+    teams.forEach(t => {
+      const o1 = document.createElement('option'); o1.value = t; o1.textContent = t; winnerSel.appendChild(o1);
+      const o2 = document.createElement('option'); o2.value = t; o2.textContent = t; loserSel.appendChild(o2);
+    });
+    if(teams[0]) winnerSel.value = teams[0];
+    if(teams[1]) loserSel.value = teams[1];
+    modal.dataset.matchId = match.id;
+    $(CONFIG.SELECTORS.resultMatchTitle).textContent = `${match.title} — ${match.date}`;
+    $(CONFIG.SELECTORS.resultMsg).textContent = '';
+    modal.style.display = 'flex';
+  }
+
+  $(CONFIG.SELECTORS.resultSave).addEventListener('click', async () => {
+    const modal = $(CONFIG.SELECTORS.resultModal);
+    const matchId = modal.dataset.matchId;
+    const winner = $(CONFIG.SELECTORS.resultWinner).value;
+    const loser = $(CONFIG.SELECTORS.resultLoser).value;
+    const msg = $(CONFIG.SELECTORS.resultMsg);
+    if(msg) msg.textContent = '';
+    if(!matchId || !winner || !loser){ if(msg) msg.textContent = 'Choose winner and loser'; return; }
+    if(winner === loser){ if(msg) msg.textContent = 'Winner and loser must be different'; return; }
+    try {
+      const r = await apiFetch(`/api/matches/${matchId}/result`, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ winner, loser }) });
+      const j = r.json || {};
+      if(!r.ok){ if(msg) msg.textContent = (j && j.error) ? j.error : 'Failed to save'; return; }
+      if(msg) msg.textContent = 'Result saved.';
+      setTimeout(()=>{ $(CONFIG.SELECTORS.resultModal).style.display = 'none'; refreshAll(); }, 600);
+    } catch(e){ console.error(e); if(msg) msg.textContent = 'Network error'; }
+  });
+  $(CONFIG.SELECTORS.resultCancel).addEventListener('click', ()=> $(CONFIG.SELECTORS.resultModal).style.display = 'none');
+
+  /**************************************************************************
+   * ADMIN: create match + cutoff
+   **************************************************************************/
+  $(CONFIG.SELECTORS.createMatchBtn).addEventListener('click', async () => {
+    const title = $(CONFIG.SELECTORS.admMatchTitle).value.trim();
+    const date = $(CONFIG.SELECTORS.admMatchDate).value.trim();
+    const adminMsgEl = $(CONFIG.SELECTORS.adminMsg);
+    if(adminMsgEl) adminMsgEl.textContent = '';
+    if(!title || !date){ if(adminMsgEl) adminMsgEl.textContent = 'Provide title and date.'; return; }
+    try {
+      const r = await apiFetch('/api/admin/create-match', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, date }) });
+      const j = r.json || {};
+      if(!r.ok){ if(adminMsgEl) adminMsgEl.textContent = j.error || 'Failed'; return; }
+      if(adminMsgEl) adminMsgEl.textContent = 'Match created.';      await loadTeams();
+      await populateBetMatches();
+      refreshAll();
+    } catch(e){ if(adminMsgEl) adminMsgEl.textContent = 'Network error'; }
+  });
+
+  // Admin cutoff save/load handlers
+  async function loadAdminCutoff(){
+    try {
+      const r = await apiFetch('/api/admin/cancel-cutoff');
+      if(!r.ok || !r.json) return;
+      const cutoff = r.json.cutoff || '';
+      if($(CONFIG.SELECTORS.adminCutoffInput)) $(CONFIG.SELECTORS.adminCutoffInput).value = cutoff;
+      if($(CONFIG.SELECTORS.cutoffStatus)) $(CONFIG.SELECTORS.cutoffStatus).textContent = cutoff ? `Current cutoff: ${cutoff}` : 'No cutoff set';
+    } catch (e) { console.warn('loadAdminCutoff failed', e); }
+  }
+  $(CONFIG.SELECTORS.saveCutoffBtn).addEventListener('click', async () => {
+    const val = $(CONFIG.SELECTORS.adminCutoffInput).value.trim();
+    if(!/^\d{1,2}:\d{2}$/.test(val)){ showToast('Invalid format. Use HH:MM'); return; }
+    try {
+      const r = await apiFetch('/api/admin/cancel-cutoff', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cutoff: val }) });
+      const j = r.json || {};
+      if(!r.ok){ showToast(j.error || 'Failed to save'); return; }
+      showToast('Cutoff saved');
+      if($(CONFIG.SELECTORS.cutoffStatus)) $(CONFIG.SELECTORS.cutoffStatus).textContent = `Current cutoff: ${val}`;
+    } catch(e){ console.error(e); showToast('Network error saving cutoff'); }
+  });
+
+  /**************************************************************************
+   * LEADERBOARD helpers
+   **************************************************************************/
+  function initials(name){
+    if(!name) return 'U';
+    const parts = name.trim().split(' ');
+    if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+    return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+  }
+  function formatMoney(v){ return '$' + Number(v||0).toLocaleString(); }
+
+  async function renderLeaderboard(){
+    const body = $(CONFIG.SELECTORS.leaderBody), noLeader = $(CONFIG.SELECTORS.noLeader);
+    if(!body) return;
+    body.innerHTML = '';
+    try {
+      const r = await apiFetch('/api/users');
+      if(!r.ok || !r.json){ if(noLeader) noLeader.style.display='block'; return; }
+      const users = r.json.users || [];
+      // store globally for name resolution
+      STATE.allUsers = Array.isArray(users) ? users : [];
+      if(users.length === 0){ if(noLeader) noLeader.style.display='block'; return; }
+      noLeader.style.display='none';
+      users.forEach((u, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="leader-cell">${idx+1}</td>
+          <td class="leader-cell"><div style="display:flex;align-items:center"><div style="width:34px;height:34px;border-radius:50%;background:#0d1620;color:#fff;display:inline-flex;align-items:center;justify-content:center;margin-right:10px">${initials(u.name)}</div><div><div style="font-weight:600">${u.name}</div><div class="muted-small">${u.email}</div></div></div></td>
+          <td class="leader-cell" style="text-align:center">${u.wins}</td>
+          <td class="leader-cell" style="text-align:center">${u.losses}</td>
+          <td class="leader-cell" style="text-align:right">${formatMoney(u.totalWin)}</td>
+        `;
+        body.appendChild(tr);
+      });
+    } catch(e){ console.error(e); if(noLeader) noLeader.style.display='block'; }
+  }
+
+  /**************************************************************************
+   * BETTING UI: populate matches, opponents, place bet
+   **************************************************************************/
+  async function populateBetMatches(){
+    const sel = $(CONFIG.SELECTORS.quickMatch);
+    if(!sel) return;
+    sel.innerHTML = '<option value="">Select Match</option>';
+    try {
+      const r = await apiFetch('/api/matches');
+      const list = (r.ok && r.json && Array.isArray(r.json.matches)) ? r.json.matches : [];
+      STATE.matches = list;
+      const prevWrap = $(CONFIG.SELECTORS.prevMatches); if(prevWrap) prevWrap.innerHTML = '';
+      if(list.length > 0) { $(CONFIG.SELECTORS.noPrev).style.display = 'none'; } else { $(CONFIG.SELECTORS.noPrev).style.display = 'block'; }
+      // populate both quickMatch and betMatchFilter
+      const matchFilter = $(CONFIG.SELECTORS.betMatchFilter);
+      if(matchFilter) matchFilter.innerHTML = '<option value="">All Matches</option>';
+      // also populate betDateFilter
+      const dateFilter = $(CONFIG.SELECTORS.betDateFilter);
+      if(dateFilter) dateFilter.innerHTML = '<option value="">All Dates</option>';
+      const seenDates = new Set();
+
+      list.forEach((m, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.textContent = `${m.title} — ${m.date}`;
+        opt.dataset.matchJson = JSON.stringify(m);
+        sel.appendChild(opt);
+
+        if(matchFilter){
+          // value is composite: title||yyyy-mm-dd so filter can match by title+date exactly
+          const composite = `${m.title}||${normalizeDateKey(m)}`;
+          const o2 = document.createElement('option');
+          o2.value = composite;
+          o2.textContent = `${m.title} — ${m.date}`;
+          matchFilter.appendChild(o2);
+        }
+        // date filter uses normalized key
+        const nk = normalizeDateKey(m);
+        if(!seenDates.has(nk) && dateFilter){
+          seenDates.add(nk);
+          const oD = document.createElement('option');
+          oD.value = nk;
+          oD.textContent = formatForDropdown(nk);
+          dateFilter.appendChild(oD);
+        }
+
+        if(prevWrap){
+          const card = document.createElement('div');
+          card.className = 'card'; card.style.padding = '12px';
+          card.innerHTML = `<div style="font-weight:600">${m.title}</div><div class="small">${m.date}</div>`;
+          prevWrap.appendChild(card);
+        }
+      });
+
+      // wire filters to re-render
+      if(matchFilter) matchFilter.addEventListener('change', () => {
+        renderRecentBets($(CONFIG.SELECTORS.betDateFilter) ? $(CONFIG.SELECTORS.betDateFilter).value : '', matchFilter.value);
+      });
+      if(dateFilter) dateFilter.addEventListener('change', () => {
+        renderRecentBets(dateFilter.value, $(CONFIG.SELECTORS.betMatchFilter) ? $(CONFIG.SELECTORS.betMatchFilter).value : '');
+      });
+
+    } catch (e) {
+      console.warn('populateBetMatches failed', e);
+    }
+  }
+
+  $(CONFIG.SELECTORS.quickMatch).addEventListener('change', (e) => {
+    const sel = e.target;
+    const teamSel = $(CONFIG.SELECTORS.quickTeam);
+    teamSel.innerHTML = '<option value="">Select Team</option>';
+    if(!sel.value) return;
+    const opt = sel.options[sel.selectedIndex];
+    try {
+      const match = JSON.parse(opt.dataset.matchJson || '{}');
+      const title = match.title || opt.textContent;
+      let teams = [];
+      if(title.includes(' VS ')) teams = title.split(' VS ');
+      else if(title.includes(' vs ')) teams = title.split(' vs ');
+      else if(title.includes(' v ')) teams = title.split(' v ');
+      else if(title.includes('-')) teams = title.split('-');
+      teams.map(s => s.trim()).filter(Boolean).forEach(t => {
+        const o = document.createElement('option'); o.value = t; o.textContent = t; teamSel.appendChild(o);
+      });
+    } catch(e){ console.warn('parse match teams', e); }
+  });
+
+  async function populateOpponents(){
+    const sel = $(CONFIG.SELECTORS.quickOpponent);
+    if(!sel) return;
+    sel.innerHTML = '<option value="">Select Name</option>';
+    const r = await apiFetch('/api/users');
+    if(!r.ok || !r.json) return;
+    const users = r.json.users || [];
+    // store globally for name resolution (important)
+    STATE.allUsers = Array.isArray(users) ? users : [];
+    (users || []).forEach(u => {
+      if(STATE.currentUser && u.name && STATE.currentUser.name && u.name.toLowerCase() === STATE.currentUser.name.toLowerCase()) return;
+      const o = document.createElement('option'); o.value = u.name; o.textContent = u.name; sel.appendChild(o);
+    });
+  }
+
+  $(CONFIG.SELECTORS.placeBetBtn).addEventListener('click', async () => {
+    const matchIdx = $(CONFIG.SELECTORS.quickMatch).value;
+    const amt = $(CONFIG.SELECTORS.quickAmt).value.trim();
+    const team = $(CONFIG.SELECTORS.quickTeam).value;
+    const opponent = $(CONFIG.SELECTORS.quickOpponent).value;
+    const betMsg = document.getElementById('betMsg'); if(betMsg) betMsg.textContent = '';
+    if(matchIdx === '' || !amt || !team || !opponent){ if(betMsg) betMsg.textContent = 'Select match, supporting team, opponent and enter amount.'; return; }
+    const matchOpt = document.getElementById('quickMatch').options[document.getElementById('quickMatch').selectedIndex];
+    const matchJson = matchOpt && matchOpt.dataset && matchOpt.dataset.matchJson ? JSON.parse(matchOpt.dataset.matchJson) : { title: matchOpt ? matchOpt.textContent : 'Unknown' };
+    if (matchJson && matchJson.winner) {
+      showToast('Bet not allowed. Match has been completed.');
+      return;
+    }
+    try {
+      const payload = { from: STATE.currentUser.name, to: opponent, match: matchJson.title || matchOpt.textContent, amount: amt, team: team };
+      const r = await apiFetch('/api/requests', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const j = r.json || {};
+      if(!r.ok){ if(betMsg) betMsg.textContent = j.error || 'Failed to create request'; return; }
+      if(betMsg) betMsg.textContent = `Bet request sent to ${opponent}.`;
+      showToast(`Request sent to ${opponent}`);
+      await fetchAndRenderRequestsAndAlerts();
+      $(CONFIG.SELECTORS.quickAmt).value = '';
+      $(CONFIG.SELECTORS.quickMatch).value = '';
+      $(CONFIG.SELECTORS.quickTeam).innerHTML = '<option value="">Select Team</option>';
+      $(CONFIG.SELECTORS.quickOpponent).value = '';
+    } catch(err){ console.error(err); if(betMsg) betMsg.textContent = 'Network error'; }
+  });
+
+  /**************************************************************************
+   * DATE helpers for filtering
+   **************************************************************************/
+  function normalizeDateKey(b){
+    const dateFields = [b.match_date, b.date, b.time, b.created_at, b.createdAt, b.date_str];
+    for(const f of dateFields){
+      if(!f) continue;
+      const d = new Date(f);
+      if(!isNaN(d.getTime())){
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth()+1).padStart(2,'0');
+        const dd = String(d.getDate()).padStart(2,'0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+    }
+    // fallback to created_at if present
+    const fallback = new Date(b.created_at || b.time || Date.now());
+    return `${fallback.getFullYear()}-${String(fallback.getMonth()+1).padStart(2,'0')}-${String(fallback.getDate()).padStart(2,'0')}`;
+  }
+  function formatForDropdown(ymd){
+    try {
+      const [y,m,d] = ymd.split('-').map(s=>Number(s));
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${String(d).padStart(2,'0')}-${monthNames[m-1]}-${y}`;
+    } catch(e){ return ymd; }
+  }
+
+  /**************************************************************************
+   * Cancel helpers (client) + server cutoff logic checks (client-side best-effort)
+   **************************************************************************/
+
+  // Helper to check cutoff on client side (only to decide whether to show Cancel button)
+  // This asks server for cutoff and evaluates it against match.date (best-effort).
+  async function isCancellationAllowedForMatch(matchDate) {
+    try {
+      const r = await apiFetch('/api/admin/cancel-cutoff');
+      if (!r.ok || !r.json) return true; // if unknown, allow
+      const cutoff = r.json.cutoff;
+      if (!cutoff) return true;
+      // try to parse match date similar to server
+      const candidate = `${matchDate} ${cutoff}`;
+      const dt = new Date(candidate);
+      if (!isNaN(dt.getTime())) return (new Date()).getTime() < dt.getTime();
+      // try ISO fallback
+      const parts = matchDate.trim().split(/[\-\/ ]+/);
+      if (parts.length === 3) {
+        const day = parts[0], month = parts[1], year = parts[2];
+        const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const mIndex = monthNames.map(x => x.toLowerCase()).indexOf(month.toString().toLowerCase());
+        if (mIndex >= 0) {
+          const iso = `${year}-${String(mIndex+1).padStart(2,'0')}-${String(day).padStart(2,'0')}T${cutoff}:00`;
+          const dt2 = new Date(iso);
+          if (!isNaN(dt2.getTime())) return (new Date()).getTime() < dt2.getTime();
+        }
+      }
+      // fallback: allow
+      return true;
+    } catch (e) {
+      console.warn('isCancellationAllowedForMatch failed', e);
+      return true;
+    }
+  }
+
+  // Cancel single bet (client)
+  async function cancelBetClient(betId) {
+    if (!confirm('Are you sure you want to cancel this bet?')) return;
+    try {
+      const r = await apiFetch(`/api/bets/${encodeURIComponent(betId)}/cancel`, { method:'POST' });
+      const j = r.json || {};
+      if (!r.ok) { showToast(j.error || 'Failed to cancel'); return; }
+      showToast('Bet cancelled');
+      await fetchAndRenderRequestsAndAlerts();
+      // re-render recent bets to reflect the cancellation message and recalc totals
+      await renderRecentBets($(CONFIG.SELECTORS.betDateFilter) ? $(CONFIG.SELECTORS.betDateFilter).value : '', $(CONFIG.SELECTORS.betMatchFilter) ? $(CONFIG.SELECTORS.betMatchFilter).value : '');
+    } catch (e) {
+      console.error(e);
+      showToast('Network error cancelling bet');
+    }
+  }
+
+  // Cancel all bets for a match (client)
+  async function cancelAllBetsForMatch(matchId, matchTitle) {
+    if (!confirm(`Cancel ALL bets for match: ${matchTitle}? This cannot be undone.`)) return;
+    try {
+      const payload = matchId ? { match_id: matchId } : { match_title: matchTitle };
+      const r = await apiFetch('/api/bets/cancel-match', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const j = r.json || {};
+      if (!r.ok) { showToast(j.error || 'Failed to cancel all'); return; }
+      showToast(`Cancelled ${j.cancelled_count || 0} bets for match`);
+      await fetchAndRenderRequestsAndAlerts();
+      await renderRecentBets($(CONFIG.SELECTORS.betDateFilter) ? $(CONFIG.SELECTORS.betDateFilter).value : '', $(CONFIG.SELECTORS.betMatchFilter) ? $(CONFIG.SELECTORS.betMatchFilter).value : '');
+    } catch (e) {
+      console.error(e);
+      showToast('Network error cancelling all bets');
+    }
+  }
+
+  /**************************************************************************
+   * RECENT BETS (UPDATED):
+   * - supports two filters: dateKey (YYYY-MM-DD) and matchKey ("title||YYYY-MM-DD")
+   * - groups bets by match so Cancel All button can be shown per match
+   * - uses resolveUserName() to show proper names instead of numeric IDs
+   **************************************************************************/
+  async function renderRecentBets(filterDateKey = '', filterMatchKey = '') {
+    const div = $(CONFIG.SELECTORS.recentBets);
+    const totalEl = $(CONFIG.SELECTORS.totalConfirmedEl);
+    if(!div) return;
+
+    try {
+      // fetch server bets
+      let serverBets = [];
+      try {
+        const r = await apiFetch('/api/bets/list');
+        if(r.ok && r.json) serverBets = Array.isArray(r.json.bets) ? r.json.bets : [];
+      } catch (e){ serverBets = []; }
+
+      const localBets = JSON.parse(localStorage.getItem('bets') || '[]');
+      const pending = JSON.parse(localStorage.getItem('pendingRequests') || '[]');
+
+      // build combined, unique
+      const combined = [];
+      const seen = new Map();
+      function makeKey(b){
+        if(!b) return '';
+        if(b.betId) return 'id:' + String(b.betId);
+        if(b.id) return 'id:' + String(b.id);
+        const from = b.from || b.fromName || b.from_name || '';
+        const to = b.to || b.toName || b.to_name || b.to_user_id || '';
+        const amt = String(b.amount || b.Amount || '');
+        const match = String(b.match || b.match_title || b.matchTitle || b.title || '');
+        const time = b.time || b.created_at || b.createdAt || '';
+        return ['k', from, to, amt, match, time].join('|');
+      }
+      function pushIfUnique(b){ const k = makeKey(b); if(!k) return; if(seen.has(k)) return; seen.set(k, true); combined.push(b); }
+
+      (serverBets || []).forEach(b => pushIfUnique(b));
+      (localBets || []).forEach(b => pushIfUnique(b));
+      (pending || []).forEach(b => pushIfUnique(b));
+
+      // allow filtering
+      let filtered = combined.slice();
+
+      // parse composite match filter if provided
+      let matchFilterTitle = '';
+      let matchFilterDateKey = '';
+      if (filterMatchKey && filterMatchKey.includes('||')) {
+        const parts = filterMatchKey.split('||');
+        matchFilterTitle = (parts[0] || '').toString().trim().toLowerCase();
+        matchFilterDateKey = (parts[1] || '').toString().trim();
+      } else if (filterMatchKey && String(filterMatchKey).includes(' — ')) {
+        // fallback if old UI value present; try to extract title and date heuristically
+        const parts = String(filterMatchKey).split(' — ');
+        matchFilterTitle = (parts[0] || '').toString().trim().toLowerCase();
+        if (parts[1]) {
+          const ds = parts[1].trim();
+          const dt = new Date(ds);
+          if (!isNaN(dt.getTime())) {
+            matchFilterDateKey = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+          }
+        }
+      } else {
+        matchFilterTitle = filterMatchKey ? String(filterMatchKey).toLowerCase() : '';
+      }
+
+      if(filterDateKey){
+        filtered = filtered.filter(b => {
+          const dKey = normalizeDateKey(b);
+          return dKey === filterDateKey;
+        });
+      }
+      if (matchFilterTitle) {
+        filtered = filtered.filter(b => {
+          const matchField = (b.match || b.match_title || b.title || '').toString().toLowerCase();
+          const dKey = normalizeDateKey(b);
+          if (matchFilterDateKey) {
+            return matchField === matchFilterTitle && dKey === matchFilterDateKey;
+          }
+          return matchField.includes(matchFilterTitle);
+        });
+      }
+
+      if(filtered.length === 0){
+        div.innerHTML = '<div class="small">No recent bets.</div>';
+        if(totalEl) totalEl.textContent = 'Total Confirmed: 0';
+        return;
+      }
+
+      // Build grouped HTML by match
+      const groups = {};
+      filtered.forEach(b => {
+        const matchKeyLabel = (b.match || b.match_title || b.title || 'Unknown Match');
+        const dateKey = normalizeDateKey(b);
+        const compositeKey = `${matchKeyLabel}||${dateKey}`;
+        if (!groups[compositeKey]) groups[compositeKey] = [];
+        groups[compositeKey].push(b);
+      });
+
+      // Evaluate cutoff for matches
+      const matchKeys = Object.keys(groups);
+      const matchCutoffMap = {};
+      await Promise.all(matchKeys.map(async (mk) => {
+        const parts = mk.split('||');
+        const matchTitle = parts[0];
+        const dateKey = parts[1];
+        const matchRow = (STATE.gamesCache || []).find(mm => ((mm.title || '').toString() === matchTitle.toString()) && normalizeDateKey(mm) === dateKey);
+        const matchDateText = matchRow ? (matchRow.date || '') : formatForDropdown(dateKey);
+        matchCutoffMap[mk] = await isCancellationAllowedForMatch(matchDateText);
+      }));
+
+      // Build HTML
+      const partsHtml = [];
+      for (const mk of matchKeys) {
+        const items = groups[mk];
+        const [matchLabel, dateKey] = mk.split('||');
+        const matchRow = (STATE.gamesCache || []).find(mm => ((mm.title || '').toString() === matchLabel.toString()) && normalizeDateKey(mm) === dateKey);
+        const isMatchLocked = !!(matchRow && matchRow.winner);
+
+        let groupHtml = `<div style="margin-bottom:12px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.01)">`;
+        groupHtml += `<div style="display:flex;align-items:center;justify-content:space-between"><strong>${matchLabel} • ${formatForDropdown(dateKey)}</strong>`;
+
+        const amCreator = matchRow && STATE.currentUser && String(matchRow.created_by) === String(STATE.currentUser.id);
+        if (amCreator && !isMatchLocked) {
+          groupHtml += `<div><button class="btn cancelAllBtn" data-matchid="${matchRow.id}" data-matchtitle="${matchLabel}">Cancel All Bets of This Match</button></div>`;
+        }
+        groupHtml += `</div>`;
+
+        for (const b of items) {
+          // robust name resolution for from/to
+          let fromName = '';
+          if (b.fromName) fromName = b.fromName;
+          else if (b.from_user_name) fromName = b.from_user_name;
+          else if (b.from_user) fromName = resolveUserName(b.from_user);
+          else if (b.from) fromName = resolveUserName(b.from);
+          else fromName = STATE.currentUser ? STATE.currentUser.name : 'Unknown';
+
+          let toName = '';
+          if (b.toName) toName = b.toName;
+          else if (b.to_user_name) toName = b.to_user_name;
+          else if (b.to_user) toName = resolveUserName(b.to_user);
+          else if (b.to) toName = resolveUserName(b.to);
+          else toName = '';
+
+          const rawStatus = (b.status || b.state || '').toLowerCase();
+        //  const hasResult = !!b.match_winner;
+          let statusLabel = '⏳ Pending';
+          if (rawStatus === 'confirmed' || rawStatus === 'won' || rawStatus === 'lost') {
+            statusLabel = '✅ Confirmed';
+          }
+          else if (rawStatus === 'cancelled') {
+            statusLabel = '⚪ Cancelled';
+          }
+          else if (rawStatus === 'declined') {
+            statusLabel = '❌ Declined';
+          }
+          //else if (rawStatus === 'confirmed' || rawStatus === 'approved') {
+           // statusLabel = '✅ Confirmed';
+          //}
+
+         // const status = (b.status || b.state || '').toLowerCase() || (b.status === undefined ? 'pending' : b.status);
+          //const statusLabel = (status === 'confirmed' || status === 'approved') ? '✅ Confirmed' : (status === 'declined' ? '❌ Declined' : (status === 'cancelled' ? '⚪ Cancelled' : '⏳ Pending'));
+          const team = b.team || b.team_supported || b.teamSupported || 'N/A';
+          const amount = b.amount || b.Amount || 0;
+          const created = b.time || b.created_at || b.createdAt || '';
+
+          // decide if cancel button should show
+          let showCancelBtn = false;
+          try {
+            const meName = STATE.currentUser ? (STATE.currentUser.name || '') : '';
+            const meId = STATE.currentUser ? String(STATE.currentUser.id) : null;
+            const isParticipant = (String(b.from_user_id) === meId) || (String(b.to_user_id) === meId) || (String(b.from || '').toLowerCase() === String(meName).toLowerCase()) || (String(b.to || '').toLowerCase() === String(meName).toLowerCase());
+            if (isParticipant && status !== 'cancelled') {
+              if (matchCutoffMap[mk]) showCancelBtn = true;
+            }
+          } catch(e){ showCancelBtn = false; }
+
+          const redealBtnHtml = (!isMatchLocked && showCancelBtn)
+          ? `<button class="btn" onclick="openRedeal(${b.id}, ${amount})">Redeal</button>`
+          : '';
+
+          const cancelBtnHtml = (!isMatchLocked && showCancelBtn) ? `<button class="btn cancelBtn" data-betid="${b.id}" data-other="${encodeURIComponent(toName)}">Cancel</button>` : '';
+
+
+          groupHtml += `<div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center"><div><strong>${fromName} → ${toName} • ${amount} (${team})</strong><div class="small">${created ? created + ' • ' : ''}${statusLabel}</div></div><div style="display:flex;gap:8px">`;
+
+          // place cancelBtnHtml on the right of the action area; Approve will be added for pending local requests elsewhere
+          groupHtml += `${redealBtnHtml}${cancelBtnHtml}</div></div>`;
+        }
+
+        groupHtml += `</div>`;
+        partsHtml.push(groupHtml);
+      }
+
+      div.innerHTML = partsHtml.join('');
+      // wire Cancel buttons
+      Array.from(div.querySelectorAll('button.cancelBtn')).forEach(btn => btn.addEventListener('click', (e) => {
+        const id = e.target.dataset.betid;
+        cancelBetClient(id);
+      }));
+      Array.from(div.querySelectorAll('button.cancelAllBtn')).forEach(btn => btn.addEventListener('click', (e) => {
+        const matchid = e.target.dataset.matchid;
+        const matchtitle = e.target.dataset.matchtitle;
+        cancelAllBetsForMatch(matchid, matchtitle);
+      }));
+
+      // update Total Confirmed after rendering
+      let totalConfirmedNew = 0;
+      filtered.forEach(b => {
+        const s = String((b.status || b.state || '').toLowerCase());
+        if (s === 'confirmed' || s === 'approved') {
+          const n = Number(String(b.amount || b.Amount || 0).replace(/[^0-9.-]+/g, ''));
+          const meId = STATE.currentUser ? String(STATE.currentUser.id) : null;
+          const meName = STATE.currentUser ? (STATE.currentUser.name || '') : '';
+          const matchesMe = (() => {
+            if (!meId) return false;
+            if (String(b.from_user_id) === meId || String(b.to_user_id) === meId) return true;
+            if ((b.from || '').toString().toLowerCase() === meName.toLowerCase()) return true;
+            if ((b.to || '').toString().toLowerCase() === meName.toLowerCase()) return true;
+            return false;
+          })();
+          if (matchesMe && !isNaN(n)) totalConfirmedNew += n;
+        }
+      });
+      if (totalEl) totalEl.textContent = `Total Confirmed: ${totalConfirmedNew}`;
+      return;
+    } catch (err) {
+      console.error('renderRecentBets error', err);
+      div.innerHTML = '<div class="small">Unable to render recent bets.</div>';
+      if(totalEl) totalEl.textContent = 'Total Confirmed: 0';
+    }
+  }
+
+  /**************************************************************************
+   * ALERTS & REQUESTS
+   **************************************************************************/
+  async function fetchAndRenderAlerts(){
+    if(!STATE.currentUser || !STATE.currentUser.name) return [];
+    try {
+      const r = await apiFetch(`/api/alerts?user=${encodeURIComponent(STATE.currentUser.name)}`);
+      const alerts = (r.ok && r.json) ? (r.json.alerts || []) : [];
+      const stored = getStoredAlerts();
+      const merged = stored.concat(alerts).filter((v,i,a) => a.findIndex(x => x.id === v.id) === i);
+      setStoredAlerts(merged);
+      renderAlertsIntoUI(merged);
+      return alerts;
+    } catch(err){
+      console.warn('fetchAndRenderAlerts failed', err);
+      const stored = getStoredAlerts();
+      renderAlertsIntoUI(stored);
+      return [];
+    }
+  }
+
+  function renderAlertsIntoUI(alerts){
+    const wrap = $(CONFIG.SELECTORS.notifWrap);
+    const pendingRequests = JSON.parse(localStorage.getItem('pendingRequests')||'[]');
+    const minePending = pendingRequests || [];
+    const parts = [];
+    if(alerts && alerts.length){
+      parts.push(alerts.map(a => `<div class="notif-item">${a.text} <div class="small" style="margin-top:6px">${a.time || ''}</div><div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end"><button class="btn dismissAlert" data-id="${a.id}">Dismiss</button></div></div>`).join(''));
+    }
+    if(minePending.length > 0){
+      parts.push(minePending.map(p => `<div class="notif-item"><div style="font-weight:600">${p.from} wants to bet ${p.amount} supporting ${p.team}</div><div class="small" style="margin-top:6px">Match: ${p.match}</div>${p.match_winner ? `<div class="small" style="margin-top:8px;color:#9aa3b2">Result declared • actions disabled</div>` : `<div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end"><button class="btn approve" data-id="${p.id}">Approve</button><button class="btn cancelBtn" data-betid="${p.id}">Cancel</button></div>`}</div>`).join(''));
+
+      // <-- UPDATED: Approve button (LEFT) and Cancel button (RIGHT). Decline removed.
+            
+          
+    }
+    if(parts.length === 0){ wrap.textContent = 'No notifications.'; return; }
+    wrap.innerHTML = parts.join('');
+    Array.from(wrap.querySelectorAll('button.dismissAlert')).forEach(b => b.addEventListener('click', async (e) => {
+      const id = e.target.dataset.id;
+      try {
+        await apiFetch('/api/alerts/dismiss', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user: STATE.currentUser.name, alertId: id }) });
+        const arr = getStoredAlerts().filter(a => String(a.id) !== String(id));
+        setStoredAlerts(arr);
+        renderAlertsIntoUI(arr);
+      } catch(e){ console.warn('dismiss failed', e); }
+    }));
+    Array.from(wrap.querySelectorAll('button.approve')).forEach(b => b.addEventListener('click', (e) => {
+      const id = e.target.dataset.id; respondToRequest(id, true);
+    }));
+    // <-- NEW: wire Cancel buttons in notifications (for pending requests)
+    Array.from(wrap.querySelectorAll('button.cancelBtn')).forEach(btn => btn.addEventListener('click', (e) => {
+      const betId = e.target.dataset.betid;
+      cancelBetClient(betId);
+    }));
+  }
+
+  // ---- REPLACED: fetchAndRenderRequestsAndAlerts now fetches /api/requests and persists pendingRequests ----
+  async function fetchAndRenderRequestsAndAlerts(){
+    try {
+      // fetch alerts and pending requests (server-side)
+      const [alertsRes, reqRes] = await Promise.all([
+        fetch('/api/alerts?user=' + encodeURIComponent(STATE.currentUser.name), { credentials: 'include' }),
+        fetch('/api/requests', { credentials: 'include' }) // server returns pendingRequests for current user
+      ]);
+
+      const alertsJson = (alertsRes && alertsRes.ok) ? await alertsRes.json() : { alerts: [] };
+      const reqJson = (reqRes && reqRes.ok) ? await reqRes.json() : { pendingRequests: [] };
+
+      const serverPending = Array.isArray(reqJson.pendingRequests) ? reqJson.pendingRequests : [];
+
+      // store server pending requests in localStorage so UI renders Approve buttons consistently
+      try {
+        // normalize pending format (keep id, from, amount, team, match, time)
+        const normalized = serverPending.map(p => ({
+          id: p.id || p.betId || p.bet_id,
+          from: p.from || p.fromName || p.from_name || p.from || '',
+          amount: p.amount,
+          team: p.team || p.team_supported || '',
+          match: p.match || p.match_title || '',
+          time: p.time || p.created_at || new Date().toISOString()
+        }));
+        // merge with any existing client pendingRequests (avoid duplicates)
+        const existing = JSON.parse(localStorage.getItem('pendingRequests') || '[]');
+        const merged = normalized.concat(existing).filter((v, i, a) => a.findIndex(x => String(x.id) === String(v.id)) === i);
+        localStorage.setItem('pendingRequests', JSON.stringify(merged.slice(0, 200)));
+      } catch (e) { console.warn('saving server pendingRequests failed', e); }
+
+      // alerts handling (same as before)
+      const storedAlerts = getStoredAlerts();
+      const mergedAlerts = storedAlerts.concat(alertsJson.alerts || []).filter((v, i, a) => a.findIndex(x => x.id === v.id) === i);
+      setStoredAlerts(mergedAlerts);
+      renderAlertsIntoUI(mergedAlerts);
+
+      // refresh bets list rendering (so Cancel/Approve counts update)
+      await renderRecentBets($(CONFIG.SELECTORS.betDateFilter) ? $(CONFIG.SELECTORS.betDateFilter).value : '', $(CONFIG.SELECTORS.betMatchFilter) ? $(CONFIG.SELECTORS.betMatchFilter).value : '');
+      return { pending: JSON.parse(localStorage.getItem('pendingRequests') || '[]'), alerts: mergedAlerts };
+    } catch (err) {
+      console.warn('fetchAndRenderRequestsAndAlerts failed', err);
+      const pending = JSON.parse(localStorage.getItem('pendingRequests') || '[]');
+      const alerts = getStoredAlerts();
+      renderAlertsIntoUI(alerts);
+      await renderRecentBets($(CONFIG.SELECTORS.betDateFilter) ? $(CONFIG.SELECTORS.betDateFilter).value : '', $(CONFIG.SELECTORS.betMatchFilter) ? $(CONFIG.SELECTORS.betMatchFilter).value : '');
+      return { pending, alerts };
+    }
+  }
+
+  async function respondToRequest(id, approved){
+    if(!id) return;
+    try {
+      const r = await apiFetch(`/api/requests/${encodeURIComponent(id)}/respond`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ approved: !!approved, responder: STATE.currentUser.name }) });
+      const j = r.json || {};
+      if(!r.ok){ showToast(j.error || 'Failed to respond'); return; }
+      showToast(approved ? 'Request approved' : 'Request declined');
+
+      if(approved){
+        try {
+          const pending = JSON.parse(localStorage.getItem('pendingRequests')||'[]');
+          const req = pending.find(p => String(p.id) === String(id));
+          const remaining = pending.filter(p => String(p.id) !== String(id));
+          localStorage.setItem('pendingRequests', JSON.stringify(remaining));
+          if(req){
+            const localBets = JSON.parse(localStorage.getItem('bets')||'[]');
+            const confirmedBet = {
+              id: req.id || ('local_' + Date.now() + Math.floor(Math.random()*9999)),
+              betId: req.id || null,
+              from: req.from || req.fromName || req.from_name || '',
+              to: STATE.currentUser.name,
+              amount: req.amount || req.amount || 0,
+              team: req.team || req.team_supported || '',
+              match: req.match || req.match_title || '',
+              status: 'approved',
+              time: new Date().toISOString()
+            };
+            localBets.unshift(confirmedBet);
+            localStorage.setItem('bets', JSON.stringify(localBets.slice(0, CONFIG.MAX_LOCAL_BETS)));
+          }
+        } catch(e){ console.warn('local confirmed bet save failed', e); }
+      }
+      await fetchAndRenderRequestsAndAlerts();
+    } catch(err){ console.error(err); showToast('Network error responding to request'); }
+  }
+  
+
+  function openRedeal(betId, oldAmount) {
+    REDEAL_BET_ID = betId;
+    REDEAL_OLD_AMOUNT = oldAmount;
+    document.getElementById('redealAmount').value = '';
+    document.getElementById('redealModal').style.display = 'flex';
+  }
+  function closeRedeal() {
+    document.getElementById('redealModal').style.display = 'none';
+  }
+  async function submitRedeal() {
+    const amount = Number(document.getElementById('redealAmount').value);
+    if (!amount || amount <= 0) {
+      showToast('Enter valid amount');
+      return;
+    }
+    try {
+      const r = await apiFetch(`/api/bets/${REDEAL_BET_ID}/redeal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount })
+      });
+      if (!r.ok) {
+        showToast(r.json?.error || 'Redeal failed');
+        return;
+      }
+      showToast(r.json.message || 'Redeal submitted');
+      closeRedeal();
+      await fetchAndRenderRequestsAndAlerts();
+      await renderRecentBets(
+        $(CONFIG.SELECTORS.betDateFilter)?.value || '',
+        $(CONFIG.SELECTORS.betMatchFilter)?.value || ''
+      );
+    } catch (e) {
+      console.error(e);
+      showToast('Network error');
+    }
+  }
+  
+
+
+
+  /**************************************************************************
+   * POLLING + REFRESH
+   **************************************************************************/
+  function startPolling(){
+    stopPolling();
+    fetchAndRenderRequestsAndAlerts();
+    STATE.polls.alerts = setInterval(async ()=> { await fetchAndRenderRequestsAndAlerts(); }, CONFIG.POLL_INTERVAL_MS);
+  }
+  function stopPolling(){
+    if(STATE.polls.alerts) clearInterval(STATE.polls.alerts);
+    STATE.polls.alerts = null;
+  }
+  async function refreshAll(){
+    await renderGames();
+    await renderPoints();
+    await renderLeaderboard();
+    await fetchAndRenderRequestsAndAlerts();
+  }
+
+  /**************************************************************************
+   * SOCKET client
+   **************************************************************************/
+  function isPayloadForMe(payload){
+    try {
+      if(!STATE.currentUser) return false;
+      const me = STATE.currentUser;
+      if(payload.toUserId && String(payload.toUserId) === String(me.id)) return true;
+      if(payload.toName && String(payload.toName).toLowerCase() === String(me.name).toLowerCase()) return true;
+      if(payload.to && String(payload.to).toLowerCase() === String(me.name).toLowerCase()) return true;
+      return false;
+    } catch(e){ return false; }
+  }
+
+  async function initSocketClient(){
+    try {
+      window.socket = io({ transports: ['websocket'], upgrade: false });
+      window.socket.on('connect', () => { console.log('socket connected'); if(window.socketIdentify) window.socketIdentify(); });
+
+      // ---- REPLACED bet_request handler: now stores pendingRequests into localStorage ----
+      window.socket.on('bet_request', (payload) => {
+        try {
+          const from = payload && (payload.from || payload.fromName || payload.from_name || 'Someone');
+          const text = `${from} requested a bet: ${payload.amount} on ${payload.team} (${payload.match})`;
+          const alertObj = {
+            id: payload.id || ('req_' + Date.now()),
+            type: 'request', text, from, match: payload.match, amount: payload.amount, team: payload.team,
+            betId: payload.betId || payload.bet_id || payload.id, time: payload.time || new Date().toISOString(),
+            toUserId: payload.toUserId || null, toName: payload.toName || payload.to || payload.to_name || null,
+            match_date: payload.match_date || null
+          };
+          const targetIsMe = isPayloadForMe(payload);
+          if (targetIsMe) {
+            // Add to stored pendingRequests so the Approve button shows
+            try {
+              const pid = alertObj.betId || alertObj.id;
+              const pending = JSON.parse(localStorage.getItem('pendingRequests') || '[]');
+              // ensure no dup
+              if (!pending.find(p => String(p.id || p.betId) === String(pid))) {
+                pending.unshift({
+                  id: pid,
+                  from: alertObj.from,
+                  amount: alertObj.amount,
+                  team: alertObj.team,
+                  match: alertObj.match,
+                  time: alertObj.time
+                });
+                localStorage.setItem('pendingRequests', JSON.stringify(pending.slice(0,200)));
+              }
+            } catch (e) { console.warn('store pendingRequests failed', e); }
+
+            pushUserAlert(alertObj);
+            renderAlertsIntoUI(getStoredAlerts());
+            renderRecentBets($(CONFIG.SELECTORS.betDateFilter) ? $(CONFIG.SELECTORS.betDateFilter).value : '', $(CONFIG.SELECTORS.betMatchFilter) ? $(CONFIG.SELECTORS.betMatchFilter).value : '');
+            if ('Notification' in window) {
+              if (Notification.permission === 'granted') { new Notification('Bet request', { body: text }); }
+              else if (Notification.permission !== 'denied') { Notification.requestPermission().then(p => { if (p === 'granted') new Notification('Bet request', { body: text }); }); }
+            }
+          } else {
+            alertObj.global = false;
+            const arr = getStoredAlerts();
+            arr.unshift(alertObj); setStoredAlerts(arr.slice(0,200));
+          }
+        } catch (e) { console.warn('bet_request handler failed', e); }
+      });
+
+      window.socket.on('bet_response', (payload) => {
+        try {
+          const from = payload && (payload.from || payload.fromName || payload.from_name || 'Someone');
+          const status = (payload && payload.status) || (payload && payload.state) || '';
+          const text = (status === 'approved' || String(status).toLowerCase()==='approved') ? `${from} approved your bet of ${payload.amount} on ${payload.team}` : `${from} declined your bet of ${payload.amount} on ${payload.team}`;
+          const alertObj = {
+            id: payload.id || ('resp_' + Date.now()), type:'response', text, from, match: payload.match, amount: payload.amount, team: payload.team,
+            status: payload.status, betId: payload.betId || payload.bet_id, time: payload.time || new Date().toISOString(),
+            toUserId: payload.toUserId || null, toName: payload.toName || payload.to || payload.to_name || null,
+            match_date: payload.match_date || null
+          };
+          const targetIsMe = isPayloadForMe(payload);
+          if(targetIsMe){
+            pushUserAlert(alertObj);
+            renderAlertsIntoUI(getStoredAlerts());
+            renderRecentBets($(CONFIG.SELECTORS.betDateFilter) ? $(CONFIG.SELECTORS.betDateFilter).value : '', $(CONFIG.SELECTORS.betMatchFilter) ? $(CONFIG.SELECTORS.betMatchFilter).value : '');
+            if('Notification' in window && Notification.permission === 'granted'){ new Notification('Bet update', { body: text }); }
+          } else {
+            const arr = getStoredAlerts(); arr.unshift(alertObj); setStoredAlerts(arr.slice(0,200));
+          }
+        } catch(e){ console.warn('bet_response handler failed', e); }
+      });
+
+      // Listen for cancellations from server
+      window.socket.on('bet_cancelled', (payload) => {
+        try {
+          // Add an alert for this user if applicable; refresh recent bets
+          const targetIsMe = isPayloadForMe(payload);
+          const text = (payload && payload.text) ? payload.text : (payload && payload.message) ? payload.message : 'A bet was cancelled';
+          const time = payload && payload.time ? payload.time : new Date().toISOString();
+          const alertObj = { id: payload && payload.betId ? ('canc_' + payload.betId) : ('canc_' + Date.now()), text: text, time: time };
+          if(targetIsMe){
+            pushUserAlert(alertObj);
+            renderAlertsIntoUI(getStoredAlerts());
+            renderRecentBets($(CONFIG.SELECTORS.betDateFilter) ? $(CONFIG.SELECTORS.betDateFilter).value : '', $(CONFIG.SELECTORS.betMatchFilter) ? $(CONFIG.SELECTORS.betMatchFilter).value : '');
+            showToast(text);
+          } else {
+            const arr = getStoredAlerts(); arr.unshift(alertObj); setStoredAlerts(arr.slice(0,200));
+          }
+        } catch(e){ console.warn('bet_cancelled handler failed', e); }
+      });
+
+      window.socket.on('connect_error', (err) => { console.warn('Socket connect_error', err); });
+      window.socket.on('error', (err) => { console.warn('Socket error', err); });
+      window.socketIdentify = function(){ try{ if(window.currentUser && window.currentUser.id) window.socket.emit('identify',{userId:window.currentUser.id,name:window.currentUser.name}); } catch(e){} };
+    } catch (e) {
+      console.warn('initSocketClient error', e);
+    }
+  }
+
+  function pushUserAlert(alertObj){
+    try {
+      const arr = getStoredAlerts();
+      if(!alertObj.id) alertObj.id = 'a_' + Date.now() + Math.floor(Math.random()*999);
+      if(!alertObj.time) alertObj.time = new Date().toISOString();
+      arr.unshift(alertObj);
+      setStoredAlerts(arr.slice(0,200));
+      const isForCurrent = (() => {
+        if(!STATE.currentUser) return false;
+        if(alertObj.toUserId && String(alertObj.toUserId) === String(STATE.currentUser.id)) return true;
+        if(alertObj.toName && String(alertObj.toName).toLowerCase() === String(STATE.currentUser.name).toLowerCase()) return true;
+        if(alertObj.to && String(alertObj.to).toLowerCase() === String(STATE.currentUser.name).toLowerCase()) return true;
+        return !!(alertObj.global === true);
+      })();
+      if(isForCurrent){
+        fetchAndRenderRequestsAndAlerts();
+        showToast(alertObj.text || 'New notification');
+      }
+    } catch(e){ console.warn('pushUserAlert failed', e); }
+  }
+
+  </script>
+
+  <script src="/socket.io/socket.io.js"></script>
+</body>
+</html>

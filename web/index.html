@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bidibet - Login / Sign Up</title>
+  <style>
+    :root{--accent:#111827;--primary:#0b1220;--card:#ffffff;--muted:#6b7280;--green:#10b981}
+    *{box-sizing:border-box}
+    body,html{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;color:var(--primary)}
+    .split{display:grid;grid-template-columns:40% 60%;height:100vh}
+    .left{position:relative;overflow:hidden}
+    .left .bg{position:absolute;inset:0;background-image:url('left-bg.jpg');background-size:cover;background-position:center}
+    .left .overlay{position:absolute;inset:0;background:linear-gradient(180deg, rgba(6,8,15,0.18), rgba(6,8,15,0.18))}
+    .logo{position:absolute;top:28px;left:32px;color:#fff;font-weight:700;letter-spacing:1px}
+    .tag{position:absolute;left:40px;bottom:60px;color:#fff;font-size:44px;line-height:1.05;max-width:60%}
+    .tag .stop{color:#ff4d4f}
+    .right{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#fafafa,#f3f4f6)}
+    .card{width:480px;background:var(--card);border-radius:14px;padding:34px;box-shadow:0 20px 40px rgba(9,10,18,0.08)}
+    .card h2{margin:0 0 6px;font-size:22px}
+    .card p{margin:0 0 18px;color:var(--muted)}
+    .input{margin-bottom:12px}
+    .input label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    .input input{width:100%;padding:12px;border-radius:8px;border:1px solid #e6e7eb;font-size:14px}
+    .actions{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+    .btn{display:inline-block;padding:12px 18px;border-radius:10px;border:0;background:var(--primary);color:#fff;font-weight:600;cursor:pointer}
+    .btn.ghost{background:transparent;color:var(--primary);border:1px solid rgba(15,23,42,0.06)}
+    .small{font-size:13px;color:var(--muted)}
+    .remember{display:flex;align-items:center;gap:8px}
+    .footer-note{margin-top:12px;color:var(--muted);font-size:13px;text-align:center}
+    .toggle-row{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px}
+    @media (max-width:900px){.split{grid-template-columns:1fr}.left{height:40vh}.tag{font-size:26px;left:20px;bottom:20px;max-width:80%}.card{width:92%;margin:0 auto}}
+  </style>
+</head>
+<body>
+  <div class="split">
+    <div class="left">
+      <div class="bg" aria-hidden="true"></div>
+      <div class="overlay" aria-hidden="true"></div>
+      <div class="logo">BIDIBET</div>
+      <div class="tag">Manage<br>every bids<br>at one <span class="stop">stop.</span></div>
+    </div>
+
+    <div class="right">
+      <div class="card" role="region" aria-label="Authentication card">
+        <div class="toggle-row">
+          <button id="showLogin" class="btn ghost">Login</button>
+          <button id="showSignup" class="btn">Sign Up</button>
+        </div>
+
+        <!-- LOGIN -->
+        <div id="loginForm">
+          <h2>Login</h2>
+          <p class="small">Login your account to employees dashboard</p>
+          <div class="input">
+            <label for="loginEmail">Email Address</label>
+            <input id="loginEmail" type="email" placeholder="name@example.com" />
+          </div>
+
+          <div class="input">
+            <label for="loginPassword">Password <span style="float:right;font-size:13px;color:var(--muted)">Forget Password?</span></label>
+            <input id="loginPassword" type="password" placeholder="********" />
+          </div>
+
+          <div class="actions">
+            <label class="remember"><input type="checkbox" id="remember"> Remember Me</label>
+            <button id="loginBtn" class="btn">Login</button>
+          </div>
+          <p id="loginMsg" class="footer-note"></p>
+        </div>
+
+        <!-- SIGNUP -->
+        <div id="signupForm" style="display:none">
+          <h2>Create account</h2>
+          <p class="small">Sign up to create your profile</p>
+          <div class="input"><label for="signupName">Name</label><input id="signupName" type="text" placeholder="Full name" /></div>
+          <div class="input"><label for="signupEmail">Email ID</label><input id="signupEmail" type="email" placeholder="you@example.com" /></div>
+          <div class="input"><label for="signupMobile">Mobile Number</label><input id="signupMobile" type="tel" placeholder="Mobile number" /></div>
+          <div class="input"><label for="signupPass">Password</label><input id="signupPass" type="password" placeholder="Create password" /></div>
+          <div class="input"><label for="signupPass2">Re-enter Password</label><input id="signupPass2" type="password" placeholder="Re-enter password" /></div>
+          <div style="display:flex;justify-content:flex-end;gap:8px"><button id="createBtn" class="btn">Create</button></div>
+          <p id="signupMsg" class="footer-note"></p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Use current origin so this works on localhost, LAN IP, ngrok URL, or cloud host
+    const API_BASE = window.location.origin;
+
+    // UI elements
+    const showLogin = document.getElementById('showLogin');
+    const showSignup = document.getElementById('showSignup');
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+    const loginMsg = document.getElementById('loginMsg');
+    const signupMsg = document.getElementById('signupMsg');
+
+    showLogin.addEventListener('click', ()=>{ loginForm.style.display='block'; signupForm.style.display='none'; showLogin.classList.add('ghost'); showSignup.classList.remove('ghost'); });
+    showSignup.addEventListener('click', ()=>{ signupForm.style.display='block'; loginForm.style.display='none'; showSignup.classList.add('ghost'); showLogin.classList.remove('ghost'); });
+
+    // Check server session on load; if logged in, go to dashboard
+    (async ()=>{
+      try{
+        const res = await fetch(`${API_BASE}/api/me`, { credentials:'include' });
+        if(res.ok){ window.location.href = 'dashboard.html'; }
+      }catch(e){}
+    })();
+
+    // helpers
+    async function postJSON(url, body){
+      const res = await fetch(url, {
+        method:'POST',
+        credentials:'include',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(body)
+      });
+      const j = await res.json().catch(()=>({}));
+      return { ok: res.ok, status: res.status, json: j };
+    }
+
+    // SIGNUP -> server
+    document.getElementById('createBtn').addEventListener('click', async ()=>{
+      signupMsg.textContent = '';
+      const name = document.getElementById('signupName').value.trim();
+      const email = document.getElementById('signupEmail').value.trim().toLowerCase();
+      const mobile = document.getElementById('signupMobile').value.trim();
+      const pass = document.getElementById('signupPass').value;
+      const pass2 = document.getElementById('signupPass2').value;
+      if(!name || !email || !mobile || !pass || !pass2){ signupMsg.textContent = 'Please fill all fields.'; return; }
+      if(pass !== pass2){ signupMsg.textContent = 'Passwords do not match.'; return; }
+
+      try{
+        const r = await postJSON(`${API_BASE}/api/signup`, { name, email, mobile, password: pass });
+        if(!r.ok){ signupMsg.textContent = r.json.error || 'Signup failed'; return; }
+        // server created user and set session cookie
+        window.location.href = 'dashboard.html';
+      }catch(err){
+        signupMsg.textContent = 'Network error';
+        console.error(err);
+      }
+    });
+
+    // LOGIN -> server
+    document.getElementById('loginBtn').addEventListener('click', async ()=>{
+      loginMsg.textContent = '';
+      const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+      const pass = document.getElementById('loginPassword').value;
+      const remember = document.getElementById('remember').checked;
+      try{
+        const r = await postJSON(`${API_BASE}/api/login`, { email, password: pass, remember });
+        if(!r.ok){ loginMsg.style.color='red'; loginMsg.textContent = r.json.error || 'Login failed'; return; }
+        window.location.href = 'dashboard.html';
+      }catch(err){
+        loginMsg.textContent = 'Network error';
+        console.error(err);
+      }
+    });
+  </script>
+</body>
+</html>
